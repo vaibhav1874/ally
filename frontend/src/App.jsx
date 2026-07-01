@@ -20,7 +20,9 @@ export default function App() {
   const [useVision, setUseVision] = useState(false);
 
   // Settings state (loads from localStorage where possible)
-  const [apiKey, setApiKey] = useState(localStorage.getItem('ally_gemini_key') || '');
+  const [ollamaHost, setOllamaHost] = useState(localStorage.getItem('ally_ollama_host') || 'http://localhost:11434');
+  const [ollamaModel, setOllamaModel] = useState(localStorage.getItem('ally_ollama_model') || 'llama3.1');
+  const [ollamaVisionModel, setOllamaVisionModel] = useState(localStorage.getItem('ally_ollama_vision_model') || 'llava');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [wakeWordEnabled, setWakeWordEnabled] = useState(true);
   const [selectedVoice, setSelectedVoice] = useState(localStorage.getItem('ally_voice') || '');
@@ -251,7 +253,7 @@ export default function App() {
     return () => {
       voiceService.stopListening();
     };
-  }, [wakeWordEnabled, companionState, selectedVoice, speechRate, voiceEnabled, useVision, apiKey]);
+  }, [wakeWordEnabled, companionState, selectedVoice, speechRate, voiceEnabled, useVision, ollamaHost, ollamaModel, ollamaVisionModel]);
 
   // --- UI Action Handlers ---
 
@@ -282,12 +284,14 @@ export default function App() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': apiKey ? `Bearer ${apiKey}` : ''
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           message: text,
-          use_vision: triggerVision
+          use_vision: triggerVision,
+          ollama_host: ollamaHost,
+          ollama_model: ollamaModel,
+          ollama_vision_model: ollamaVisionModel
         })
       });
 
@@ -363,10 +367,13 @@ export default function App() {
     }
   };
 
-  const handleSaveApiKey = (key) => {
-    setApiKey(key);
-    localStorage.setItem('ally_gemini_key', key);
-    // Hit a test endpoint or simply save. We can set it in session storage/state.
+  const handleSaveOllamaSettings = (host, model, visionModel) => {
+    setOllamaHost(host);
+    setOllamaModel(model);
+    setOllamaVisionModel(visionModel);
+    localStorage.setItem('ally_ollama_host', host);
+    localStorage.setItem('ally_ollama_model', model);
+    localStorage.setItem('ally_ollama_vision_model', visionModel);
   };
 
   // --- Automation executions ---
@@ -593,8 +600,10 @@ export default function App() {
 
         {activeTab === 'settings' && (
           <Settings
-            apiKey={apiKey}
-            onSaveApiKey={handleSaveApiKey}
+            ollamaHost={ollamaHost}
+            ollamaModel={ollamaModel}
+            ollamaVisionModel={ollamaVisionModel}
+            onSaveOllamaSettings={handleSaveOllamaSettings}
             voiceEnabled={voiceEnabled}
             setVoiceEnabled={setVoiceEnabled}
             wakeWordEnabled={wakeWordEnabled}
