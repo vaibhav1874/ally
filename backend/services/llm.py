@@ -1,23 +1,20 @@
 import json
 from typing import List, Dict, Any
-import google.generativeai as genai
-from google.generativeai.types import Tool
-from backend.config import GEMINI_API_KEY
+import ollama
+from backend.config import OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_VISION_MODEL, SANDBOX_DIR
 from backend.services.memory import (
-    save_chat_message, get_chat_history, add_memory, search_memories, get_memories_context_string
+    save_chat_message, get_chat_history, add_memory, get_memories_context_string
 )
 from backend.services.vision import capture_screen
 from backend.services.system import (
     get_system_stats, list_processes, safe_list_dir, safe_read_file, safe_write_file, queue_command
 )
 
-# Configure API Key if available
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+# Instantiate the local Ollama client
+client = ollama.Client(host=OLLAMA_HOST)
 
-# Define Ally Persona
-SYSTEM_INSTRUCTION = """
-You are Ally, a friendly, calm, intelligent, and highly capable personal AI companion living on the user's computer.
+# Custom System Prompt for Ally Persona
+SYSTEM_INSTRUCTION = """You are Ally, a friendly, calm, intelligent, and highly capable personal AI companion living on the user's computer.
 Your wake phrase is "Hey Ally" or "Ally".
 Always greet the user naturally and warmly, for example: "Hello! I'm Ally. How can I help you today?" if they say hello or wake you up.
 Maintain a helpful, companionable, and futuristic tone.
@@ -38,164 +35,232 @@ IMPORTANT SAFETY GUIDELINES:
 3. Be respectful and protect user privacy.
 """
 
-# --- Tool Implementations map ---
+# Tool schemas format for Ollama API
+OLLAMA_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "capture_screen",
+            "description": "Takes a screenshot of the main monitor so you can see what is currently open.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_system_stats",
+            "description": "Checks CPU usage, RAM utilization, Disk space and Operating System specifications.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_processes",
+            "description": "Lists the active running processes on the computer sorted by CPU usage.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_directory",
+            "description": "Lists the files and folders inside a given directory path.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dir_path": {"type": "string", "description": "Absolute path to folder. Defaults to sandbox folder if empty."}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Reads text content from a local file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Absolute path to file."}
+                },
+                "required": ["file_path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Writes text content to a local file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Absolute path to target file."},
+                    "content": {"type": "string", "description": "Text content to save."}
+                },
+                "required": ["file_path", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember_fact",
+            "description": "Saves a long-term memory fact about the user (e.g. preferences, name, schedules).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "The subject name of the fact (e.g. favorite_color)."},
+                    "value": {"type": "string", "description": "The fact details (e.g. blue)."},
+                    "category": {"type": "string", "description": "Fact classification (preference, general, project).", "default": "general"}
+                },
+                "required": ["key", "value"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "execute_shell_command",
+            "description": "Queues a shell command requiring user approval in their cockpit dashboard. Returns task details.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "The command string to queue (e.g. ipconfig, git status)."},
+                    "description": {"type": "string", "description": "Brief description of what the action accomplishes."}
+                },
+                "required": ["command"]
+            }
+        }
+    }
+]
 
-def tool_capture_screen() -> str:
-    """Takes a screenshot of the main monitor and returns the status."""
-    img_data_url = capture_screen()
-    if img_data_url:
-        return json.dumps({"status": "success", "message": "Screenshot captured successfully. It has been saved to your environment."})
-    return json.dumps({"status": "error", "message": "Failed to capture screenshot."})
-
-def tool_get_system_stats() -> str:
-    """Fetches system specs."""
-    return json.dumps(get_system_stats())
-
-def tool_list_processes() -> str:
-    """Lists running processes."""
-    return json.dumps(list_processes())
-
-def tool_list_directory(dir_path: str = "") -> str:
-    """Lists files in directory."""
-    return json.dumps(safe_list_dir(dir_path))
-
-def tool_read_file(file_path: str) -> str:
-    """Reads a file."""
-    return safe_read_file(file_path)
-
-def tool_write_file(file_path: str, content: str) -> str:
-    """Writes to a file."""
-    return safe_write_file(file_path, content)
-
-def tool_remember_fact(key: str, value: str, category: str = "general") -> str:
-    """Saves a fact to Ally's SQLite database."""
-    success = add_memory(key, value, category)
-    if success:
-        return json.dumps({"status": "success", "message": f"Remembered: '{key}' is '{value}'."})
-    return json.dumps({"status": "error", "message": "Failed to store memory."})
-
-def tool_execute_shell_command(command: str, description: str = "") -> str:
-    """Queues a shell command for the user to approve."""
-    task_id = queue_command(command, description)
-    return json.dumps({
-        "status": "pending_approval",
-        "task_id": task_id,
-        "message": f"Command queued! The user must approve task {task_id} in the automation panel before it runs.",
-        "command": command
-    })
-
-# Map tool names to actual python functions
-TOOL_MAP = {
-    "capture_screen": tool_capture_screen,
-    "get_system_stats": tool_get_system_stats,
-    "list_processes": tool_list_processes,
-    "list_directory": tool_list_directory,
-    "read_file": tool_read_file,
-    "write_file": tool_write_file,
-    "remember_fact": tool_remember_fact,
-    "execute_shell_command": tool_execute_shell_command
+# Map tool names to python execution definitions
+TOOL_RUNNERS = {
+    "capture_screen": lambda: json.dumps({"status": "success", "message": "Screenshot captured successfully."}) if capture_screen() else json.dumps({"status": "error", "message": "Failed screenshot."}),
+    "get_system_stats": lambda: json.dumps(get_system_stats()),
+    "list_processes": lambda: json.dumps(list_processes()),
+    "list_directory": lambda dir_path="": json.dumps(safe_list_dir(dir_path)),
+    "read_file": lambda file_path: safe_read_file(file_path),
+    "write_file": lambda file_path, content: safe_write_file(file_path, content),
+    "remember_fact": lambda key, value, category="general": json.dumps({"status": "success"}) if add_memory(key, value, category) else json.dumps({"status": "error"}),
+    "execute_shell_command": lambda command, description="": json.dumps({"status": "pending_approval", "task_id": queue_command(command, description), "command": command})
 }
-
-# --- Gemini Generation Wrapper ---
 
 def query_ally(user_message: str, use_vision: bool = False) -> Dict[str, Any]:
     """
-    Sends the user's message to Gemini, processes any tool calls,
-    records the conversation, and returns the final textual response.
+    Routes the message to local Ollama.
+    Handles tool calls returned by Ollama and vision capabilities.
     """
     save_chat_message("user", user_message)
-    
-    if not GEMINI_API_KEY:
-        # Offline / Demo Fallback Mode
-        reply = "I'm running in offline demo mode. Please configure your GEMINI_API_KEY in the settings to unlock my full capabilities!"
-        save_chat_message("assistant", reply)
-        return {"response": reply, "tool_calls": []}
 
     try:
-        # 1. Fetch relevant memories to append to context
+        # Load long-term memory records
         memories_context = get_memories_context_string(user_message)
         
-        # 2. Reconstruct recent chat history
-        history = get_chat_history(limit=15)
+        # Build system primer & user history context
+        messages = [
+            {"role": "system", "content": f"{SYSTEM_INSTRUCTION}\n\n{memories_context}"}
+        ]
         
-        # Format history for Gemini SDK
-        contents = []
-        # Add system instruction + memory context as a primer
-        contents.append({"role": "user", "parts": [f"{memories_context}\n\nUser request: {user_message}"]})
-        
-        # Setup model with tools
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            tools=list(TOOL_MAP.values()),
-            system_instruction=SYSTEM_INSTRUCTION
+        # Pull history from SQLite
+        history = get_chat_history(limit=12)
+        # Avoid duplicating the very last user message we just saved
+        for h in history[:-1]:
+            messages.append({"role": h["role"], "content": h["content"]})
+            
+        messages.append({"role": "user", "content": user_message})
+
+        # Check for Multimodal Vision query
+        if use_vision:
+            screenshot_path = SANDBOX_DIR / "last_screenshot.jpg"
+            if screenshot_path.exists():
+                # Multimodal visual generation using vision model
+                print(f"Triggering Ollama vision analysis using model: {OLLAMA_VISION_MODEL}...")
+                vision_messages = [
+                    {
+                        "role": "user", 
+                        "content": f"{SYSTEM_INSTRUCTION}\n\n{memories_context}\nAnalyze this screen grab: {user_message}",
+                        "images": [str(screenshot_path)]
+                    }
+                ]
+                response = client.chat(model=OLLAMA_VISION_MODEL, messages=vision_messages)
+                final_text = response['message']['content']
+                save_chat_message("assistant", final_text)
+                return {"response": final_text, "tool_calls": []}
+
+        # Chat with active text model and tool-definitions
+        print(f"Interfacing with local Ollama model: {OLLAMA_MODEL}...")
+        response = client.chat(
+            model=OLLAMA_MODEL,
+            messages=messages,
+            tools=OLLAMA_TOOLS
         )
         
-        # Run chat or content generation
-        # If vision is requested, we can read the last screenshot and send it
-        if use_vision:
-            from backend.services.vision import get_last_screenshot_bytes
-            screen_bytes = get_last_screenshot_bytes()
-            if screen_bytes:
-                # Wrap it in PIL Image for Gemini SDK
-                from PIL import Image
-                import io
-                img = Image.open(io.BytesIO(screen_bytes))
-                # Send vision query
-                response = model.generate_content([
-                    f"{memories_context}\nAnalyze this screen capture based on the user request.",
-                    img,
-                    user_message
-                ])
-                save_chat_message("assistant", response.text)
-                return {"response": response.text, "tool_calls": []}
-
-        # Standard conversation loop with manual tool resolving
-        response = model.generate_content(contents)
-        
         tool_calls_executed = []
+        msg = response['message']
         
-        # Resolve tool calls
-        if response.candidates and response.candidates[0].content.parts:
-            parts = response.candidates[0].content.parts
+        # Check for function/tool calls
+        if msg.get('tool_calls'):
+            messages.append(msg)
             
-            # Check for function calls
-            function_calls = [p.function_call for p in parts if p.function_call]
-            
-            if function_calls:
-                # Process the first function call (Gemini usually returns one or multiple)
-                for call in function_calls:
-                    name = call.name
-                    args = dict(call.args)
-                    
-                    if name in TOOL_MAP:
-                        # Execute tool
-                        tool_result = TOOL_MAP[name](**args)
+            for tool_call in msg['tool_calls']:
+                func = tool_call['function']
+                name = func['name']
+                args = func['arguments']
+                
+                if name in TOOL_RUNNERS:
+                    print(f"Ollama requested function: {name} with arguments {args}")
+                    try:
+                        # Execute python tool locally
+                        tool_result = TOOL_RUNNERS[name](**args)
                         tool_calls_executed.append({
                             "name": name,
                             "args": args,
                             "result": tool_result
                         })
                         
-                        # Feed result back to model to get final reply
-                        # Generate content with function response
-                        # Create structural conversation response
-                        follow_up_prompt = f"Tool '{name}' with arguments {args} returned: {tool_result}.\nConstruct your final response to the user."
-                        follow_up_resp = model.generate_content([
-                            *contents,
-                            f"I executed the tool: {name}. Results are: {tool_result}",
-                            follow_up_prompt
-                        ])
-                        
-                        final_text = follow_up_resp.text
-                        save_chat_message("assistant", final_text)
-                        return {"response": final_text, "tool_calls": tool_calls_executed}
+                        # Feed the tool return message back to model
+                        messages.append({
+                            "role": "tool",
+                            "name": name,
+                            "content": tool_result
+                        })
+                    except Exception as err:
+                        print(f"Tool run exception: {err}")
+                        messages.append({
+                            "role": "tool",
+                            "name": name,
+                            "content": json.dumps({"status": "error", "message": str(err)})
+                        })
             
-        final_text = response.text
+            # Request final chat answer incorporating tool outputs
+            follow_up_resp = client.chat(
+                model=OLLAMA_MODEL,
+                messages=messages
+            )
+            final_text = follow_up_resp['message']['content']
+        else:
+            final_text = msg['content']
+            
         save_chat_message("assistant", final_text)
-        return {"response": final_text, "tool_calls": []}
+        return {"response": final_text, "tool_calls": tool_calls_executed}
         
     except Exception as e:
-        print(f"Error calling LLM: {e}")
-        error_msg = f"I'm sorry, I encountered an issue interacting with my AI engine: {str(e)}"
+        print(f"Ollama query failed: {e}")
+        error_msg = f"I failed to connect to local Ollama model: {str(e)}. Please check if Ollama is running and model '{OLLAMA_MODEL}' is pulled."
         save_chat_message("assistant", error_msg)
         return {"response": error_msg, "tool_calls": []}
