@@ -3,8 +3,10 @@ import { Settings as SettingsIcon, Key, Volume2, Cpu, RefreshCw, Check, AlertCir
 import SystemStats from './SystemStats';
 
 export default function Settings({
-  apiKey = '',
-  onSaveApiKey = () => {},
+  ollamaHost = 'http://localhost:11434',
+  ollamaModel = 'llama3.1',
+  ollamaVisionModel = 'llava',
+  onSaveOllamaSettings = () => {},
   voiceEnabled = true,
   setVoiceEnabled = () => {},
   wakeWordEnabled = true,
@@ -15,13 +17,17 @@ export default function Settings({
   setSpeechRate = () => {},
   serverOnline = false
 }) {
-  const [tempKey, setTempKey] = useState(apiKey);
+  const [tempHost, setTempHost] = useState(ollamaHost);
+  const [tempModel, setTempModel] = useState(ollamaModel);
+  const [tempVisionModel, setTempVisionModel] = useState(ollamaVisionModel);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [availableVoices, setAvailableVoices] = useState([]);
 
   useEffect(() => {
-    setTempKey(apiKey);
-  }, [apiKey]);
+    setTempHost(ollamaHost);
+    setTempModel(ollamaModel);
+    setTempVisionModel(ollamaVisionModel);
+  }, [ollamaHost, ollamaModel, ollamaVisionModel]);
 
   useEffect(() => {
     // Load local speech synthesis voices
@@ -38,9 +44,9 @@ export default function Settings({
     }
   }, []);
 
-  const handleSaveKey = (e) => {
+  const handleSaveSettings = (e) => {
     e.preventDefault();
-    onSaveApiKey(tempKey);
+    onSaveOllamaSettings(tempHost, tempModel, tempVisionModel);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
   };
@@ -80,24 +86,49 @@ export default function Settings({
           </span>
         </div>
 
-        {/* API Key Form */}
-        <form onSubmit={handleSaveKey} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }} className="glass-card">
+        {/* Ollama Settings Form */}
+        <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }} className="glass-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
             <Key size={14} color="var(--accent-purple)" />
-            <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>GEMINI COGNITION KEY</span>
+            <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>LOCAL OLLAMA ENGINE</span>
           </div>
           
-          <input
-            type="password"
-            placeholder="AI Studio API Key"
-            value={tempKey}
-            onChange={(e) => setTempKey(e.target.value)}
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', flex: 1 }}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Ollama Host URL:</span>
+              <input
+                type="text"
+                placeholder="http://localhost:11434"
+                value={tempHost}
+                onChange={(e) => setTempHost(e.target.value)}
+                style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Chat Model (Tools Supported):</span>
+              <input
+                type="text"
+                placeholder="llama3.1"
+                value={tempModel}
+                onChange={(e) => setTempModel(e.target.value)}
+                style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Vision Model (Multimodal):</span>
+              <input
+                type="text"
+                placeholder="llava"
+                value={tempVisionModel}
+                onChange={(e) => setTempVisionModel(e.target.value)}
+                style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
+              />
+            </div>
+          </div>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem' }}>
             <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-              Gets saved to local session & .env
+              Configure models in `.env` too
             </span>
             <button type="submit" className="btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               {saveSuccess ? (
@@ -106,7 +137,7 @@ export default function Settings({
                   <span>Saved!</span>
                 </>
               ) : (
-                <span>Save Key</span>
+                <span>Save Configurations</span>
               )}
             </button>
           </div>
@@ -187,7 +218,7 @@ export default function Settings({
         <div style={{ display: 'flex', gap: '0.4rem', padding: '0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
           <AlertCircle size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
           <div>
-            To avoid entering your API key in the UI every session, set <strong>GEMINI_API_KEY</strong> inside `backend/.env` and restart the backend.
+            Ensure your local Ollama instance is active. Run <strong>ollama run llama3.1</strong> in a shell to download the base chat model.
           </div>
         </div>
 
