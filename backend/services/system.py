@@ -128,17 +128,13 @@ def execute_queued_command(task_id: str) -> Dict[str, Any]:
     task["status"] = "executing"
     
     try:
-        # Run using powershell/cmd depending on platform
-        is_windows = platform.system() == "Windows"
-        shell_executable = "powershell.exe" if is_windows else None
-        
+        # Run using default system shell
         result = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30, # 30 seconds limit
-            executable=shell_executable
+            timeout=30 # 30 seconds limit
         )
         
         task["status"] = "completed"
