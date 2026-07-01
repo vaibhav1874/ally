@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from backend.config import verify_config, GEMINI_API_KEY
+from backend.config import verify_config, OLLAMA_HOST, OLLAMA_MODEL
 from backend.services.llm import query_ally
 from backend.services.vision import capture_screen
 from backend.services.memory import (
@@ -71,7 +71,9 @@ def read_root():
     return {
         "status": "online",
         "companion": "Ally",
-        "api_configured": bool(GEMINI_API_KEY)
+        "api_configured": True,
+        "ollama_host": OLLAMA_HOST,
+        "ollama_model": OLLAMA_MODEL
     }
 
 # Chat Interface
