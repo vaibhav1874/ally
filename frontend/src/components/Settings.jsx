@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Key, Volume2, Cpu, RefreshCw, Check, AlertCircle } from 'lucide-react';
+import SystemStats from './SystemStats';
 
 export default function Settings({
   apiKey = '',
@@ -178,6 +179,9 @@ export default function Settings({
             </div>
           )}
         </div>
+
+        {/* Hardware Status Monitor */}
+        <SystemStats serverOnline={serverOnline} />
 
         {/* Documentation / Info Card */}
         <div style={{ display: 'flex', gap: '0.4rem', padding: '0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
