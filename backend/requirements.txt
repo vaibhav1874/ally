@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-google-generativeai
 pillow
 psutil
 python-dotenv
+ollama
