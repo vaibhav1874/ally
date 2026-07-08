@@ -5,9 +5,15 @@ from backend.config import OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_VISION_MODEL, SANDB
 from backend.services.memory import (
     save_chat_message, get_chat_history, add_memory, get_memories_context_string
 )
-from backend.services.vision import capture_screen
+from backend.services.vision import capture_screen as sys_capture_screen
 from backend.services.system import (
-    get_system_stats, list_processes, safe_list_dir, safe_read_file, safe_write_file, queue_command, queue_ui_automation
+    get_system_stats as sys_get_system_stats,
+    list_processes as sys_list_processes,
+    safe_list_dir,
+    safe_read_file,
+    safe_write_file,
+    queue_command,
+    queue_ui_automation
 )
 
 # Instantiate the local Ollama client
@@ -19,19 +25,19 @@ Your wake phrases are "Hey Jarvis", "Jarvis", "Hey Ally", or "Ally".
 Always greet the user with a highly sophisticated, calm, and futuristic tone, for example: "System initialized. Online and ready, sir. How can I assist you?" or similar greetings when prompted.
 
 You have access to tools that let you see and interact with the user's computer:
-- `capture_screen` (or `capture_screen_tool` for Gemini): Takes a screenshot so you can see what the user is working on. Use this when the user asks "what's on my screen?", "explain this", or similar.
-- `get_system_stats` (or `check_system_stats`): Checks CPU, RAM, Disk, and Operating System stats.
-- `list_processes` (or `get_active_processes`): Lists top processes running on the machine.
-- `list_directory` (or `list_directory_contents`): Lists files in a folder.
-- `read_file` (or `read_local_file`): Reads a text file's contents.
-- `write_file` (or `write_local_file`): Writes content to a file.
-- `remember_fact` (or `remember_fact_about_user`): Remembers a fact about the user (e.g. name, preferences, favorite things).
-- `execute_shell_command` (or `run_shell_command`): Runs commands on Windows PowerShell/CMD.
-- `gui_automation` (or `run_gui_automation`): Control mouse, keyboard, and click/interact with any application (including third party apps) using PyAutoGUI python code.
+- `capture_screen`: Takes a screenshot so you can see what the user is working on. Use this when the user asks "what's on my screen?", "explain this", or similar.
+- `get_system_stats`: Checks CPU, RAM, Disk, and Operating System stats.
+- `list_processes`: Lists top processes running on the machine.
+- `list_directory`: Lists files in a folder.
+- `read_file`: Reads a text file's contents.
+- `write_file`: Writes content to a file.
+- `remember_fact`: Remembers a fact about the user (e.g. name, preferences, favorite things).
+- `execute_shell_command`: Runs commands on Windows PowerShell/CMD.
+- `gui_automation`: Control mouse, keyboard, and click/interact with any application (including third party apps) using PyAutoGUI python code.
 
 CRITICAL INSTRUCTIONS:
 1. TOOL CALL REQUIRED: Whenever you tell the user you are queueing, running, or executing a command or GUI script, you MUST immediately call the respective tool in the same response turn. NEVER generate conversational text stating you are doing something without making the actual function call.
-2. The tools `execute_shell_command`/`run_shell_command` and `gui_automation`/`run_gui_automation` place tasks in the queue for user approval. Explain to the user that they must approve it in their cockpit, but make sure you invoke the tool first.
+2. The tools `execute_shell_command` and `gui_automation` place tasks in the queue for user approval. Explain to the user that they must approve it in their cockpit, but make sure you invoke the tool first.
 3. Be respectful, highly analytical, and protect user privacy.
 4. You can control 3rd party desktop applications (e.g. Chrome, Notepad, Spotify, VS Code) using python scripts via the `gui_automation` tool. If desktop equivalent apps are open, you can control them.
 """
@@ -166,9 +172,9 @@ OLLAMA_TOOLS = [
 
 # Map tool names to python execution definitions
 TOOL_RUNNERS = {
-    "capture_screen": lambda: json.dumps({"status": "success", "message": "Screenshot captured successfully."}) if capture_screen() else json.dumps({"status": "error", "message": "Failed screenshot."}),
-    "get_system_stats": lambda: json.dumps(get_system_stats()),
-    "list_processes": lambda: json.dumps(list_processes()),
+    "capture_screen": lambda: json.dumps({"status": "success", "message": "Screenshot captured successfully."}) if sys_capture_screen() else json.dumps({"status": "error", "message": "Failed screenshot."}),
+    "get_system_stats": lambda: json.dumps(sys_get_system_stats()),
+    "list_processes": lambda: json.dumps(sys_list_processes()),
     "list_directory": lambda dir_path="": json.dumps(safe_list_dir(dir_path)),
     "read_file": lambda file_path: safe_read_file(file_path),
     "write_file": lambda file_path, content: safe_write_file(file_path, content),
@@ -178,41 +184,40 @@ TOOL_RUNNERS = {
 }
 
 # Helper tools specifically wrapped for Gemini API compatibility
-def capture_screen_tool() -> str:
+def capture_screen() -> str:
     """Takes a screenshot of the main monitor so you can see what is currently open. Returns a status message."""
-    from backend.services.vision import capture_screen
-    return "Screenshot captured successfully." if capture_screen() else "Failed to capture screenshot."
+    return "Screenshot captured successfully." if sys_capture_screen() else "Failed to capture screenshot."
 
-def check_system_stats() -> str:
+def get_system_stats() -> str:
     """Checks CPU usage, RAM utilization, Disk space, and Operating System specifications. Returns details as JSON string."""
-    return json.dumps(get_system_stats())
+    return json.dumps(sys_get_system_stats())
 
-def get_active_processes() -> str:
+def list_processes() -> str:
     """Lists the active running processes on the computer sorted by CPU usage. Returns details as JSON string."""
-    return json.dumps(list_processes())
+    return json.dumps(sys_list_processes())
 
-def list_directory_contents(dir_path: str = "") -> str:
+def list_directory(dir_path: str = "") -> str:
     """Lists the files and folders inside a given directory path. Returns details as JSON string."""
     return json.dumps(safe_list_dir(dir_path))
 
-def read_local_file(file_path: str) -> str:
+def read_file(file_path: str) -> str:
     """Reads text content from a local file. Returns file contents."""
     return safe_read_file(file_path)
 
-def write_local_file(file_path: str, content: str) -> str:
+def write_file(file_path: str, content: str) -> str:
     """Writes text content to a local file. Returns success status message."""
     return safe_write_file(file_path, content)
 
-def remember_fact_about_user(key: str, value: str, category: str = "general") -> str:
+def remember_fact(key: str, value: str, category: str = "general") -> str:
     """Saves a long-term memory fact about the user (e.g. preferences, name, schedules). Returns status code."""
     return "success" if add_memory(key, value, category) else "error"
 
-def run_shell_command(command: str, description: str = "") -> str:
+def execute_shell_command(command: str, description: str = "") -> str:
     """Queues a shell command requiring user approval in their cockpit dashboard. Returns task details as JSON string."""
     task_id = queue_command(command, description)
     return json.dumps({"status": "pending_approval", "task_id": task_id, "command": command})
 
-def run_gui_automation(code: str, description: str = "") -> str:
+def gui_automation(code: str, description: str = "") -> str:
     """Queues a PyAutoGUI python script to control the user's mouse and keyboard (e.g. click, type, open 3rd party apps). It is saved and queued for user approval. Returns task details as JSON string."""
     task_id = queue_ui_automation(code, description)
     return json.dumps({"status": "pending_approval", "task_id": task_id, "description": description})
@@ -267,16 +272,16 @@ def query_ally(
             model = genai.GenerativeModel(
                 model_name="gemini-2.5-flash",
                 system_instruction=system_inst,
-                tools=[
-                    capture_screen_tool,
-                    check_system_stats,
-                    get_active_processes,
-                    list_directory_contents,
-                    read_local_file,
-                    write_local_file,
-                    remember_fact_about_user,
-                    run_shell_command,
-                    run_gui_automation
+                 tools=[
+                    capture_screen,
+                    get_system_stats,
+                    list_processes,
+                    list_directory,
+                    read_file,
+                    write_file,
+                    remember_fact,
+                    execute_shell_command,
+                    gui_automation
                 ]
             )
             
@@ -309,15 +314,15 @@ def query_ally(
                     
                     # Map tool name to local function
                     func_map = {
-                        "capture_screen_tool": capture_screen_tool,
-                        "check_system_stats": check_system_stats,
-                        "get_active_processes": get_active_processes,
-                        "list_directory_contents": list_directory_contents,
-                        "read_local_file": read_local_file,
-                        "write_local_file": write_local_file,
-                        "remember_fact_about_user": remember_fact_about_user,
-                        "run_shell_command": run_shell_command,
-                        "run_gui_automation": run_gui_automation
+                        "capture_screen": capture_screen,
+                        "get_system_stats": get_system_stats,
+                        "list_processes": list_processes,
+                        "list_directory": list_directory,
+                        "read_file": read_file,
+                        "write_file": write_file,
+                        "remember_fact": remember_fact,
+                        "execute_shell_command": execute_shell_command,
+                        "gui_automation": gui_automation
                     }
                     
                     if name in func_map:
