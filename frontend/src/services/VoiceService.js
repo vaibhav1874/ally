@@ -142,7 +142,17 @@ class VoiceService {
       if (onEnd) onEnd();
     };
 
-    this.synth.speak(utterance);
+    // Execute with a short timeout to prevent browser speechSynthesis queues from hanging
+    setTimeout(() => {
+      if (this.synth.paused) {
+        this.synth.resume();
+      }
+      this.synth.speak(utterance);
+      // Extra resume call just in case it got stuck paused right after starting
+      if (this.synth.paused) {
+        this.synth.resume();
+      }
+    }, 50);
   }
 
   cancelSpeaking() {

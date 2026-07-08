@@ -23,10 +23,10 @@ export default function App() {
   const [ollamaHost, setOllamaHost] = useState(localStorage.getItem('ally_ollama_host') || 'http://localhost:11434');
   const [ollamaModel, setOllamaModel] = useState(localStorage.getItem('ally_ollama_model') || 'llama3.1');
   const [ollamaVisionModel, setOllamaVisionModel] = useState(localStorage.getItem('ally_ollama_vision_model') || 'llava');
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [wakeWordEnabled, setWakeWordEnabled] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(localStorage.getItem('ally_voice_enabled') !== 'false');
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(localStorage.getItem('ally_wakeword_enabled') !== 'false');
   const [selectedVoice, setSelectedVoice] = useState(localStorage.getItem('ally_voice') || '');
-  const [speechRate, setSpeechRate] = useState(1.0);
+  const [speechRate, setSpeechRate] = useState(parseFloat(localStorage.getItem('ally_speech_rate') || '1.0'));
 
   // Backend state
   const [memories, setMemories] = useState([]);
@@ -34,8 +34,36 @@ export default function App() {
   const [completedTasks, setCompletedTasks] = useState({});
   const [serverOnline, setServerOnline] = useState(false);
 
-  // Refs for tracking speaking loops
+  // Refs for tracking speaking loops and sync state callbacks safely without effect recycles
   const amplitudeIntervalRef = useRef(null);
+  const wakeWordEnabledRef = useRef(wakeWordEnabled);
+  const companionStateRef = useRef(companionState);
+  const handleSendMessageRef = useRef(null);
+  const handleVoiceOutputRef = useRef(null);
+
+  useEffect(() => {
+    wakeWordEnabledRef.current = wakeWordEnabled;
+  }, [wakeWordEnabled]);
+
+  useEffect(() => {
+    companionStateRef.current = companionState;
+  }, [companionState]);
+
+  useEffect(() => {
+    localStorage.setItem('ally_voice_enabled', voiceEnabled);
+  }, [voiceEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('ally_wakeword_enabled', wakeWordEnabled);
+  }, [wakeWordEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('ally_voice', selectedVoice);
+  }, [selectedVoice]);
+
+  useEffect(() => {
+    localStorage.setItem('ally_speech_rate', speechRate);
+  }, [speechRate]);
 
   // --- Play Web Audio Synth Chime ---
   const playWakeSound = () => {
@@ -153,6 +181,7 @@ export default function App() {
                 id: task_id,
                 command: originalTask?.command || 'Unknown Command',
                 description: originalTask?.description || 'Executed Command',
+                code: originalTask?.code || null,
                 status: 'completed',
                 result
               }
@@ -203,13 +232,13 @@ export default function App() {
   // --- Voice Service Loop ---
 
   useEffect(() => {
-    // Initializer browser recognition
+    // Initialize browser speech recognition exactly once on mount
     const success = voiceService.initRecognition(
       async (transcript) => {
         const text = transcript.toLowerCase();
         
         // Wake Word Check: "hey ally" or "ally"
-        if (wakeWordEnabled && (text.includes("hey ally") || text.includes("ally"))) {
+        if (wakeWordEnabledRef.current && (text.includes("hey ally") || text.includes("ally"))) {
           playWakeSound();
           setCompanionState('listening');
           
@@ -226,34 +255,49 @@ export default function App() {
 
           if (query) {
             // Trigger request directly with voice text
-            await handleSendMessage(query);
+            if (handleSendMessageRef.current) {
+              await handleSendMessageRef.current(query);
+            }
           } else {
             // Wake word with no instruction - Greet user
             setCompanionState('speaking');
             const greeting = "Hello! I'm Ally. How can I help you today?";
-            handleVoiceOutput(greeting);
+            if (handleVoiceOutputRef.current) {
+              handleVoiceOutputRef.current(greeting);
+            }
           }
-        } else if (!wakeWordEnabled && companionState === 'listening') {
+        } else if (!wakeWordEnabledRef.current && companionStateRef.current === 'listening') {
           // If wake word is disabled, but microphone listening was clicked manually
-          setCompanionState('listening');
-          await handleSendMessage(transcript);
+          if (handleSendMessageRef.current) {
+            await handleSendMessageRef.current(transcript);
+          }
         }
       },
       (listeningState) => {
-        if (!listeningState && companionState === 'listening') {
+        if (!listeningState && companionStateRef.current === 'listening') {
           setCompanionState('idle');
         }
       }
     );
 
-    if (success && wakeWordEnabled) {
+    // Initial load start if wakeWordEnabled is true
+    if (success && wakeWordEnabledRef.current) {
       voiceService.startListening();
     }
 
     return () => {
       voiceService.stopListening();
     };
-  }, [wakeWordEnabled, companionState, selectedVoice, speechRate, voiceEnabled, useVision, ollamaHost, ollamaModel, ollamaVisionModel]);
+  }, []); // Run exactly once on mount
+
+  // Control speech listening state dynamically when wakeWordEnabled toggles
+  useEffect(() => {
+    if (wakeWordEnabled) {
+      voiceService.startListening();
+    } else {
+      voiceService.stopListening();
+    }
+  }, [wakeWordEnabled]);
 
   // --- UI Action Handlers ---
 
@@ -345,6 +389,14 @@ export default function App() {
       }
     );
   };
+
+  useEffect(() => {
+    handleSendMessageRef.current = handleSendMessage;
+  }, [handleSendMessage]);
+
+  useEffect(() => {
+    handleVoiceOutputRef.current = handleVoiceOutput;
+  }, [handleVoiceOutput]);
 
   const handleToggleMic = () => {
     if (companionState === 'listening') {

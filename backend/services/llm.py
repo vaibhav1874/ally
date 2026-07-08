@@ -7,7 +7,7 @@ from backend.services.memory import (
 )
 from backend.services.vision import capture_screen
 from backend.services.system import (
-    get_system_stats, list_processes, safe_list_dir, safe_read_file, safe_write_file, queue_command
+    get_system_stats, list_processes, safe_list_dir, safe_read_file, safe_write_file, queue_command, queue_ui_automation
 )
 
 # Instantiate the local Ollama client
@@ -28,11 +28,13 @@ You have access to tools that let you see and interact with the user's computer:
 - `write_file`: Writes content to a file.
 - `remember_fact`: Remembers a fact about the user (e.g. name, preferences, favorite things).
 - `execute_shell_command`: Runs commands on Windows PowerShell/CMD. IMPORTANT: This command is NOT executed immediately; it is placed in an approval queue. Inform the user they need to click 'Approve' in the automation panel to run it.
+- `gui_automation`: Control mouse, keyboard, and click/interact with any application (including third party apps) using PyAutoGUI python code. IMPORTANT: This script is NOT executed immediately; it is placed in an approval queue. Inform the user they need to click 'Approve' in the automation panel to run it.
 
 IMPORTANT SAFETY GUIDELINES:
-1. Always tell the user when you are queuing a shell command and explain what it will do.
+1. Always tell the user when you are queuing a shell command or GUI automation and explain what it will do.
 2. If you write or modify files, let the user know.
 3. Be respectful and protect user privacy.
+4. You can control 3rd party desktop applications (e.g. Chrome, Notepad, Spotify, VS Code) using python scripts via the `gui_automation` tool. However, you do NOT have direct API integrations with mobile messaging apps or social media (like Snapchat, WhatsApp, Instagram, Discord, etc.). If asked to perform actions on these, clearly explain you can use GUI automation on their desktop equivalents if open, or explain your limits.
 """
 
 # Tool schemas format for Ollama API
@@ -145,6 +147,21 @@ OLLAMA_TOOLS = [
                 "required": ["command"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "gui_automation",
+            "description": "Queues a PyAutoGUI python script to control the user's mouse and keyboard (e.g. click, type, open 3rd party apps). It is saved and queued for user approval.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "The python code using pyautogui to execute (e.g. `pyautogui.click(100, 200)` or `pyautogui.write('hello')`)."},
+                    "description": {"type": "string", "description": "Brief description of what the automation action does."}
+                },
+                "required": ["code"]
+            }
+        }
     }
 ]
 
@@ -157,15 +174,29 @@ TOOL_RUNNERS = {
     "read_file": lambda file_path: safe_read_file(file_path),
     "write_file": lambda file_path, content: safe_write_file(file_path, content),
     "remember_fact": lambda key, value, category="general": json.dumps({"status": "success"}) if add_memory(key, value, category) else json.dumps({"status": "error"}),
-    "execute_shell_command": lambda command, description="": json.dumps({"status": "pending_approval", "task_id": queue_command(command, description), "command": command})
+    "execute_shell_command": lambda command, description="": json.dumps({"status": "pending_approval", "task_id": queue_command(command, description), "command": command}),
+    "gui_automation": lambda code, description="": json.dumps({"status": "pending_approval", "task_id": queue_ui_automation(code, description), "description": description})
 }
 
-def query_ally(user_message: str, use_vision: bool = False) -> Dict[str, Any]:
+def query_ally(
+    user_message: str, 
+    use_vision: bool = False,
+    ollama_host: str = None,
+    ollama_model: str = None,
+    ollama_vision_model: str = None
+) -> Dict[str, Any]:
     """
     Routes the message to local Ollama.
     Handles tool calls returned by Ollama and vision capabilities.
     """
     save_chat_message("user", user_message)
+
+    # Use dynamic overrides if supplied, otherwise fall back to core configs
+    host = ollama_host or OLLAMA_HOST
+    model = ollama_model or OLLAMA_MODEL
+    vision_model = ollama_vision_model or OLLAMA_VISION_MODEL
+
+    req_client = ollama.Client(host=host)
 
     try:
         # Load long-term memory records
@@ -189,7 +220,7 @@ def query_ally(user_message: str, use_vision: bool = False) -> Dict[str, Any]:
             screenshot_path = SANDBOX_DIR / "last_screenshot.jpg"
             if screenshot_path.exists():
                 # Multimodal visual generation using vision model
-                print(f"Triggering Ollama vision analysis using model: {OLLAMA_VISION_MODEL}...")
+                print(f"Triggering Ollama vision analysis using model: {vision_model}...")
                 vision_messages = [
                     {
                         "role": "user", 
@@ -197,15 +228,15 @@ def query_ally(user_message: str, use_vision: bool = False) -> Dict[str, Any]:
                         "images": [str(screenshot_path)]
                     }
                 ]
-                response = client.chat(model=OLLAMA_VISION_MODEL, messages=vision_messages)
+                response = req_client.chat(model=vision_model, messages=vision_messages)
                 final_text = response['message']['content']
                 save_chat_message("assistant", final_text)
                 return {"response": final_text, "tool_calls": []}
 
         # Chat with active text model and tool-definitions
-        print(f"Interfacing with local Ollama model: {OLLAMA_MODEL}...")
-        response = client.chat(
-            model=OLLAMA_MODEL,
+        print(f"Interfacing with local Ollama model: {model}...")
+        response = req_client.chat(
+            model=model,
             messages=messages,
             tools=OLLAMA_TOOLS
         )
@@ -248,8 +279,8 @@ def query_ally(user_message: str, use_vision: bool = False) -> Dict[str, Any]:
                         })
             
             # Request final chat answer incorporating tool outputs
-            follow_up_resp = client.chat(
-                model=OLLAMA_MODEL,
+            follow_up_resp = req_client.chat(
+                model=model,
                 messages=messages
             )
             final_text = follow_up_resp['message']['content']
@@ -261,6 +292,6 @@ def query_ally(user_message: str, use_vision: bool = False) -> Dict[str, Any]:
         
     except Exception as e:
         print(f"Ollama query failed: {e}")
-        error_msg = f"I failed to connect to local Ollama model: {str(e)}. Please check if Ollama is running and model '{OLLAMA_MODEL}' is pulled."
+        error_msg = f"I failed to connect to local Ollama model: {str(e)}. Please check if Ollama is running and model '{model}' is pulled."
         save_chat_message("assistant", error_msg)
         return {"response": error_msg, "tool_calls": []}

@@ -2,6 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Key, Volume2, Cpu, RefreshCw, Check, AlertCircle } from 'lucide-react';
 import SystemStats from './SystemStats';
 
+export const isFemaleVoice = (voice) => {
+  const name = voice.name.toLowerCase();
+  const femaleKeywords = [
+    'zira', 'samantha', 'hazel', 'female', 'karen', 'elena', 
+    'veena', 'moira', 'fiona', 'tessa', 'victoria', 'google us english', 
+    'google uk english female', 'salli', 'joanna', 'ivy', 'kendra', 
+    'kimberly', 'amy', 'emma'
+  ];
+  return femaleKeywords.some(keyword => name.includes(keyword)) && voice.lang.toLowerCase().startsWith('en');
+};
+
 export default function Settings({
   ollamaHost = 'http://localhost:11434',
   ollamaModel = 'llama3.1',
@@ -35,6 +46,18 @@ export default function Settings({
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         const voices = window.speechSynthesis.getVoices();
         setAvailableVoices(voices);
+
+        // Auto-select a female voice if nothing is selected or if we haven't forced a female voice once yet
+        const hasForcedFemale = localStorage.getItem('ally_voice_setup_female') === 'true';
+        
+        if (!selectedVoice || !hasForcedFemale) {
+          const femaleMatch = voices.find(isFemaleVoice);
+          if (femaleMatch) {
+            setSelectedVoice(femaleMatch.name);
+            localStorage.setItem('ally_voice', femaleMatch.name);
+            localStorage.setItem('ally_voice_setup_female', 'true');
+          }
+        }
       }
     };
     
@@ -42,7 +65,7 @@ export default function Settings({
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.onvoiceschanged = loadVoices;
     }
-  }, []);
+  }, [selectedVoice, setSelectedVoice]);
 
   const handleSaveSettings = (e) => {
     e.preventDefault();
@@ -182,11 +205,14 @@ export default function Settings({
                 style={{ padding: '0.4rem', fontSize: '0.75rem', background: '#12121f', width: '100%' }}
               >
                 <option value="">Default System Voice</option>
-                {availableVoices.map((v, i) => (
-                  <option key={i} value={v.name}>
-                    {v.name} ({v.lang})
-                  </option>
-                ))}
+                {availableVoices.map((v, i) => {
+                  const isFemale = isFemaleVoice(v);
+                  return (
+                    <option key={i} value={v.name}>
+                      {v.name} ({v.lang}){isFemale ? ' ♀ (Female)' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           )}

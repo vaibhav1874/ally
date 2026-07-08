@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -58,6 +58,9 @@ ws_manager = ConnectionManager()
 class ChatRequest(BaseModel):
     message: str
     use_vision: bool = False
+    ollama_host: Optional[str] = None
+    ollama_model: Optional[str] = None
+    ollama_vision_model: Optional[str] = None
 
 class MemoryCreateRequest(BaseModel):
     key: str
@@ -67,6 +70,8 @@ class MemoryCreateRequest(BaseModel):
 # --- Endpoints ---
 
 @app.get("/")
+@app.get("/api")
+@app.get("/api/")
 def read_root():
     return {
         "status": "online",
@@ -83,7 +88,13 @@ async def chat_endpoint(request: ChatRequest):
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     
     # Run the query
-    result = query_ally(request.message, request.use_vision)
+    result = query_ally(
+        request.message, 
+        request.use_vision,
+        ollama_host=request.ollama_host,
+        ollama_model=request.ollama_model,
+        ollama_vision_model=request.ollama_vision_model
+    )
     
     # Broadcast an update to frontend to check for new commands if any
     pending = get_pending_commands()

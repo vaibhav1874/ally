@@ -16,7 +16,7 @@ if not exist "backend\.env" (
 
 :: Starting backend server in separate shell
 echo [+] Launching local FastAPI backend on port 8000...
-start "Ally Backend Server" cmd /k "title Ally Backend && cd backend && ..\venv\Scripts\python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000"
+start "Ally Backend Server" cmd /k "title Ally Backend && venv\Scripts\python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000"
 
 :: Wait 1.5 seconds for backend startup
 timeout /t 2 /nobreak >nul

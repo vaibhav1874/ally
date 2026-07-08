@@ -4,3 +4,6 @@ pillow
 psutil
 python-dotenv
 ollama
+websockets
+pyautogui
+opencv-python

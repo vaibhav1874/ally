@@ -104,7 +104,7 @@ def safe_write_file(file_path: str, content: str) -> str:
 
 # --- Shell Automation & Approval System ---
 
-def queue_command(command: str, description: str = "") -> str:
+def queue_command(command: str, description: str = "", code: str = None) -> str:
     """Queues a shell command requiring user approval and returns a unique task ID."""
     task_id = str(uuid.uuid4())
     PENDING_COMMANDS[task_id] = {
@@ -113,6 +113,8 @@ def queue_command(command: str, description: str = "") -> str:
         "description": description or f"Execute: {command}",
         "status": "pending"
     }
+    if code is not None:
+        PENDING_COMMANDS[task_id]["code"] = code
     return task_id
 
 def execute_queued_command(task_id: str) -> Dict[str, Any]:
@@ -165,4 +167,30 @@ def reject_queued_command(task_id: str) -> Dict[str, Any]:
 def get_pending_commands() -> List[Dict[str, Any]]:
     """Returns all currently pending commands."""
     return [c for c in PENDING_COMMANDS.values() if c["status"] == "pending"]
-from pathlib import Path
+
+def queue_ui_automation(code: str, description: str = "") -> str:
+    """
+    Saves a generated PyAutoGUI script into sandbox/ui_auto.py and queues a command 
+    requiring user approval to run it. Returns the task ID.
+    """
+    from pathlib import Path
+    script_path = SANDBOX_DIR / "ui_auto.py"
+    
+    # Prepend safety failsafes for PyAutoGUI (so moving cursor to screen corners aborts automation)
+    formatted_code = (
+        "import pyautogui\n"
+        "import time\n"
+        "pyautogui.FAILSAFE = True\n"
+        "pyautogui.PAUSE = 0.5\n\n"
+        f"{code}\n"
+    )
+    
+    try:
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(formatted_code)
+    except Exception as e:
+        print(f"Error writing UI automation script: {e}")
+        
+    command = "..\\venv\\Scripts\\python sandbox\\ui_auto.py"
+    task_id = queue_command(command, description or "Run GUI Automation Action", code=code)
+    return task_id

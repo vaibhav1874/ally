@@ -122,12 +122,34 @@ export default function AutomationPanel({
                 }}>
                   $ {task.command}
                 </div>
+
+                {task.code && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.25rem' }}>
+                    <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>GENERATED PYTHON CODE:</span>
+                    <pre style={{
+                      margin: 0,
+                      background: '#040407',
+                      border: '1px solid var(--border-color)',
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: '6px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.75rem',
+                      color: 'var(--accent-purple)',
+                      overflowX: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all'
+                    }}>
+                      <code>{task.code}</code>
+                    </pre>
+                  </div>
+                )}
               </div>
             ))}
 
             {/* Completed commands */}
             {Object.values(completedTasks).map((task) => {
               const hasOutput = task.result && (task.result.stdout || task.result.stderr);
+              const canExpand = task.code || hasOutput;
               const isExpanded = expandedTask === task.id;
               const isError = task.result && task.result.exit_code !== 0;
 
@@ -156,7 +178,7 @@ export default function AutomationPanel({
                       </span>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{task.description}</span>
                     </div>
-                    {hasOutput && (
+                    {canExpand && (
                       <button
                         onClick={() => toggleExpand(task.id)}
                         style={{ background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}
@@ -180,33 +202,57 @@ export default function AutomationPanel({
                     $ {task.command}
                   </div>
 
-                  {/* Render output terminal if expanded */}
-                  {isExpanded && hasOutput && (
-                    <div style={{
-                      backgroundColor: '#030305',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '6px',
-                      padding: '0.5rem',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.7rem',
-                      maxHeight: '150px',
-                      overflowY: 'auto',
-                      color: isError ? '#ef4444' : '#e4e4e7',
-                      marginTop: '0.2rem'
-                    }}>
-                      {task.result.stderr && (
-                        <div style={{ color: '#ef4444', marginBottom: '0.25rem' }}>
-                          [STDERR] {task.result.stderr}
+                  {/* Render code and output terminal if expanded */}
+                  {isExpanded && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.2rem' }}>
+                      {task.code && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>GENERATED PYTHON CODE:</span>
+                          <pre style={{
+                            margin: 0,
+                            background: '#040407',
+                            border: '1px solid var(--border-color)',
+                            padding: '0.5rem 0.75rem',
+                            borderRadius: '6px',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.75rem',
+                            color: 'rgba(157, 78, 221, 0.75)',
+                            overflowX: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-all'
+                          }}>
+                            <code>{task.code}</code>
+                          </pre>
                         </div>
                       )}
-                      {task.result.stdout && (
-                        <div>
-                          [STDOUT] {task.result.stdout}
+                      
+                      {hasOutput && (
+                        <div style={{
+                          backgroundColor: '#030305',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '6px',
+                          padding: '0.5rem',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.7rem',
+                          maxHeight: '150px',
+                          overflowY: 'auto',
+                          color: isError ? '#ef4444' : '#e4e4e7'
+                        }}>
+                          {task.result.stderr && (
+                            <div style={{ color: '#ef4444', marginBottom: '0.25rem' }}>
+                              [STDERR] {task.result.stderr}
+                            </div>
+                          )}
+                          {task.result.stdout && (
+                            <div>
+                              [STDOUT] {task.result.stdout}
+                            </div>
+                          )}
+                          <div style={{ color: 'var(--text-muted)', marginTop: '0.25rem', fontSize: '0.65rem' }}>
+                            Exit code: {task.result.exit_code}
+                          </div>
                         </div>
                       )}
-                      <div style={{ color: 'var(--text-muted)', marginTop: '0.25rem', fontSize: '0.65rem' }}>
-                        Exit code: {task.result.exit_code}
-                      </div>
                     </div>
                   )}
                 </div>
