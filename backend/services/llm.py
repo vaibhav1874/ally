@@ -247,6 +247,13 @@ def query_ally(
         genai.configure(api_key=api_key)
         
         try:
+            print("Listing available models for the user's API key...")
+            for m in genai.list_models():
+                print(f"Available model: {m.name} (Methods: {m.supported_generation_methods})")
+        except Exception as list_err:
+            print(f"Could not list models: {list_err}")
+
+        try:
             memories_context = get_memories_context_string(user_message)
             system_inst = f"{SYSTEM_INSTRUCTION}\n\n{memories_context}"
             
@@ -259,7 +266,7 @@ def query_ally(
                 
             # Initialize Gemini model with tools
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
+                model_name="gemini-2.5-flash",
                 system_instruction=system_inst,
                 tools=[
                     capture_screen_tool,
