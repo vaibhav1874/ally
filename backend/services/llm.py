@@ -178,18 +178,183 @@ TOOL_RUNNERS = {
     "gui_automation": lambda code, description="": json.dumps({"status": "pending_approval", "task_id": queue_ui_automation(code, description), "description": description})
 }
 
+# Helper tools specifically wrapped for Gemini API compatibility
+def capture_screen_tool() -> str:
+    """Takes a screenshot of the main monitor so you can see what is currently open. Returns a status message."""
+    from backend.services.vision import capture_screen
+    return "Screenshot captured successfully." if capture_screen() else "Failed to capture screenshot."
+
+def check_system_stats() -> str:
+    """Checks CPU usage, RAM utilization, Disk space, and Operating System specifications. Returns details as JSON string."""
+    return json.dumps(get_system_stats())
+
+def get_active_processes() -> str:
+    """Lists the active running processes on the computer sorted by CPU usage. Returns details as JSON string."""
+    return json.dumps(list_processes())
+
+def list_directory_contents(dir_path: str = "") -> str:
+    """Lists the files and folders inside a given directory path. Returns details as JSON string."""
+    return json.dumps(safe_list_dir(dir_path))
+
+def read_local_file(file_path: str) -> str:
+    """Reads text content from a local file. Returns file contents."""
+    return safe_read_file(file_path)
+
+def write_local_file(file_path: str, content: str) -> str:
+    """Writes text content to a local file. Returns success status message."""
+    return safe_write_file(file_path, content)
+
+def remember_fact_about_user(key: str, value: str, category: str = "general") -> str:
+    """Saves a long-term memory fact about the user (e.g. preferences, name, schedules). Returns status code."""
+    return "success" if add_memory(key, value, category) else "error"
+
+def run_shell_command(command: str, description: str = "") -> str:
+    """Queues a shell command requiring user approval in their cockpit dashboard. Returns task details as JSON string."""
+    task_id = queue_command(command, description)
+    return json.dumps({"status": "pending_approval", "task_id": task_id, "command": command})
+
+def run_gui_automation(code: str, description: str = "") -> str:
+    """Queues a PyAutoGUI python script to control the user's mouse and keyboard (e.g. click, type, open 3rd party apps). It is saved and queued for user approval. Returns task details as JSON string."""
+    task_id = queue_ui_automation(code, description)
+    return json.dumps({"status": "pending_approval", "task_id": task_id, "description": description})
+
+
 def query_ally(
     user_message: str, 
     use_vision: bool = False,
     ollama_host: str = None,
     ollama_model: str = None,
-    ollama_vision_model: str = None
+    ollama_vision_model: str = None,
+    provider: str = "ollama",
+    gemini_api_key: str = None
 ) -> Dict[str, Any]:
     """
-    Routes the message to local Ollama.
-    Handles tool calls returned by Ollama and vision capabilities.
+    Routes the message to the selected provider (Ollama or Gemini).
+    Handles tool calls and vision capabilities.
     """
     save_chat_message("user", user_message)
+
+    if provider == "gemini":
+        import os
+        import google.generativeai as genai
+        # Prioritize key passed in request, otherwise fall back to environment variable
+        api_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            err_msg = "Gemini API key is missing. Please obtain a free API key at https://aistudio.google.com/ and enter it in the Settings tab."
+            save_chat_message("assistant", err_msg)
+            return {"response": err_msg, "tool_calls": []}
+            
+        genai.configure(api_key=api_key)
+        
+        try:
+            memories_context = get_memories_context_string(user_message)
+            system_inst = f"{SYSTEM_INSTRUCTION}\n\n{memories_context}"
+            
+            # Map SQLite history to Gemini format
+            history = get_chat_history(limit=12)
+            gemini_history = []
+            for h in history[:-1]:
+                role = 'user' if h['role'] == 'user' else 'model'
+                gemini_history.append({'role': role, 'parts': [h['content']]})
+                
+            # Initialize Gemini model with tools
+            model = genai.GenerativeModel(
+                model_name="gemini-1.5-flash",
+                system_instruction=system_inst,
+                tools=[
+                    capture_screen_tool,
+                    check_system_stats,
+                    get_active_processes,
+                    list_directory_contents,
+                    read_local_file,
+                    write_local_file,
+                    remember_fact_about_user,
+                    run_shell_command,
+                    run_gui_automation
+                ]
+            )
+            
+            chat = model.start_chat(history=gemini_history)
+            
+            # Check for multimodal visual query
+            if use_vision:
+                screenshot_path = SANDBOX_DIR / "last_screenshot.jpg"
+                if screenshot_path.exists():
+                    import PIL.Image
+                    print("Triggering Gemini vision analysis using screen grab...")
+                    img = PIL.Image.open(screenshot_path)
+                    response = chat.send_message([user_message, img])
+                else:
+                    response = chat.send_message(user_message)
+            else:
+                response = chat.send_message(user_message)
+                
+            tool_calls_executed = []
+            
+            # Manual function call execution loop
+            for _ in range(5):
+                candidate = response.candidates[0]
+                if candidate.content and candidate.content.parts and candidate.content.parts[0].function_call:
+                    function_call = candidate.content.parts[0].function_call
+                    name = function_call.name
+                    args = dict(function_call.args)
+                    
+                    print(f"Gemini requested function: {name} with arguments {args}")
+                    
+                    # Map tool name to local function
+                    func_map = {
+                        "capture_screen_tool": capture_screen_tool,
+                        "check_system_stats": check_system_stats,
+                        "get_active_processes": get_active_processes,
+                        "list_directory_contents": list_directory_contents,
+                        "read_local_file": read_local_file,
+                        "write_local_file": write_local_file,
+                        "remember_fact_about_user": remember_fact_about_user,
+                        "run_shell_command": run_shell_command,
+                        "run_gui_automation": run_gui_automation
+                    }
+                    
+                    if name in func_map:
+                        try:
+                            # Execute local function
+                            tool_result = func_map[name](**args)
+                            tool_calls_executed.append({
+                                "name": name,
+                                "args": args,
+                                "result": tool_result
+                            })
+                            
+                            # Send response back to model
+                            response = chat.send_message(
+                                genai.types.Part.from_function_response(
+                                    name=name,
+                                    response={'result': tool_result}
+                                )
+                            )
+                        except Exception as err:
+                            print(f"Gemini tool execution error: {err}")
+                            response = chat.send_message(
+                                genai.types.Part.from_function_response(
+                                    name=name,
+                                    response={'error': str(err)}
+                                )
+                            )
+                    else:
+                        print(f"Warning: Gemini requested unknown function {name}")
+                        break
+                else:
+                    # No more function calls
+                    break
+                    
+            final_text = response.text
+            save_chat_message("assistant", final_text)
+            return {"response": final_text, "tool_calls": tool_calls_executed}
+            
+        except Exception as e:
+            print(f"Gemini API call failed: {e}")
+            err_msg = f"Failed to connect to Gemini API: {str(e)}"
+            save_chat_message("assistant", err_msg)
+            return {"response": err_msg, "tool_calls": []}
 
     # Use dynamic overrides if supplied, otherwise fall back to core configs
     host = ollama_host or OLLAMA_HOST

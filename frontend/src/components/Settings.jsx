@@ -26,7 +26,11 @@ export default function Settings({
   setSelectedVoice = () => {},
   speechRate = 1.0,
   setSpeechRate = () => {},
-  serverOnline = false
+  serverOnline = false,
+  provider = 'ollama',
+  setProvider = () => {},
+  geminiApiKey = '',
+  setGeminiApiKey = () => {}
 }) {
   const [tempHost, setTempHost] = useState(ollamaHost);
   const [tempModel, setTempModel] = useState(ollamaModel);
@@ -109,62 +113,139 @@ export default function Settings({
           </span>
         </div>
 
-        {/* Ollama Settings Form */}
-        <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }} className="glass-card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
-            <Key size={14} color="var(--accent-purple)" />
-            <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>LOCAL OLLAMA ENGINE</span>
+        {/* Provider Selection */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }} className="glass-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.4rem', marginBottom: '0.2rem' }}>
+            <Cpu size={14} color="var(--accent-purple)" />
+            <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>AI PROVIDER CONFIGURATION</span>
           </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Ollama Host URL:</span>
-              <input
-                type="text"
-                placeholder="http://localhost:11434"
-                value={tempHost}
-                onChange={(e) => setTempHost(e.target.value)}
-                style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Chat Model (Tools Supported):</span>
-              <input
-                type="text"
-                placeholder="llama3.1"
-                value={tempModel}
-                onChange={(e) => setTempModel(e.target.value)}
-                style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Vision Model (Multimodal):</span>
-              <input
-                type="text"
-                placeholder="llava"
-                value={tempVisionModel}
-                onChange={(e) => setTempVisionModel(e.target.value)}
-                style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
-              />
-            </div>
-          </div>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem' }}>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-              Configure models in `.env` too
-            </span>
-            <button type="submit" className="btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-              {saveSuccess ? (
-                <>
-                  <Check size={12} />
-                  <span>Saved!</span>
-                </>
-              ) : (
-                <span>Save Configurations</span>
-              )}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.2rem' }}>
+            <button
+              type="button"
+              onClick={() => setProvider('ollama')}
+              style={{
+                flex: 1,
+                padding: '0.5rem',
+                fontSize: '0.75rem',
+                borderRadius: '6px',
+                border: '1px solid',
+                borderColor: provider === 'ollama' ? 'var(--accent-purple)' : 'var(--border-color)',
+                background: provider === 'ollama' ? 'rgba(157, 78, 221, 0.1)' : 'transparent',
+                color: provider === 'ollama' ? 'var(--text-primary)' : 'var(--text-muted)',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              Ollama (Local CPU/GPU)
+            </button>
+            <button
+              type="button"
+              onClick={() => setProvider('gemini')}
+              style={{
+                flex: 1,
+                padding: '0.5rem',
+                fontSize: '0.75rem',
+                borderRadius: '6px',
+                border: '1px solid',
+                borderColor: provider === 'gemini' ? 'var(--accent-purple)' : 'var(--border-color)',
+                background: provider === 'gemini' ? 'rgba(157, 78, 221, 0.1)' : 'transparent',
+                color: provider === 'gemini' ? 'var(--text-primary)' : 'var(--text-muted)',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              Gemini (Cloud - Fast & Free)
             </button>
           </div>
-        </form>
+        </div>
+
+        {/* Ollama Settings Form */}
+        {provider === 'ollama' && (
+          <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }} className="glass-card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+              <Key size={14} color="var(--accent-purple)" />
+              <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>LOCAL OLLAMA ENGINE</span>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Ollama Host URL:</span>
+                <input
+                  type="text"
+                  placeholder="http://localhost:11434"
+                  value={tempHost}
+                  onChange={(e) => setTempHost(e.target.value)}
+                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Chat Model (Tools Supported):</span>
+                <input
+                  type="text"
+                  placeholder="llama3.1"
+                  value={tempModel}
+                  onChange={(e) => setTempModel(e.target.value)}
+                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Vision Model (Multimodal):</span>
+                <input
+                  type="text"
+                  placeholder="llava"
+                  value={tempVisionModel}
+                  onChange={(e) => setTempVisionModel(e.target.value)}
+                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
+                />
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                Configure models in `.env` too
+              </span>
+              <button type="submit" className="btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                {saveSuccess ? (
+                  <>
+                    <Check size={12} />
+                    <span>Saved!</span>
+                  </>
+                ) : (
+                  <span>Save Configurations</span>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Gemini Settings Form */}
+        {provider === 'gemini' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }} className="glass-card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+              <Key size={14} color="var(--accent-blue)" />
+              <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>GEMINI API ENGINE</span>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Gemini API Key:</span>
+                <input
+                  type="password"
+                  placeholder="Paste your Gemini API key here..."
+                  value={geminiApiKey}
+                  onChange={(e) => setGeminiApiKey(e.target.value)}
+                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', background: '#12121f', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '4px' }}
+                />
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '0.4rem', padding: '0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+              <div>
+                Get a free API key at <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)', textDecoration: 'underline', fontWeight: 'bold' }}>Google AI Studio</a>. Flash models are completely free and provide ultra-fast speeds!
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Voice preferences */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }} className="glass-card">

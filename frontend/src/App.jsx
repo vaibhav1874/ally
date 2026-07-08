@@ -27,6 +27,8 @@ export default function App() {
   const [wakeWordEnabled, setWakeWordEnabled] = useState(localStorage.getItem('ally_wakeword_enabled') !== 'false');
   const [selectedVoice, setSelectedVoice] = useState(localStorage.getItem('ally_voice') || '');
   const [speechRate, setSpeechRate] = useState(parseFloat(localStorage.getItem('ally_speech_rate') || '1.0'));
+  const [provider, setProvider] = useState(localStorage.getItem('ally_provider') || 'ollama');
+  const [geminiApiKey, setGeminiApiKey] = useState(localStorage.getItem('ally_gemini_api_key') || '');
 
   // Backend state
   const [memories, setMemories] = useState([]);
@@ -64,6 +66,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('ally_speech_rate', speechRate);
   }, [speechRate]);
+
+  useEffect(() => {
+    localStorage.setItem('ally_provider', provider);
+  }, [provider]);
+
+  useEffect(() => {
+    localStorage.setItem('ally_gemini_api_key', geminiApiKey);
+  }, [geminiApiKey]);
 
   // --- Play Web Audio Synth Chime ---
   const playWakeSound = () => {
@@ -237,8 +247,13 @@ export default function App() {
       async (transcript) => {
         const text = transcript.toLowerCase();
         
-        // Wake Word Check: "hey ally" or "ally"
-        if (wakeWordEnabledRef.current && (text.includes("hey ally") || text.includes("ally"))) {
+        const isManuallyListening = companionStateRef.current === 'listening';
+
+        if (isManuallyListening) {
+          if (transcript.trim() && handleSendMessageRef.current) {
+            await handleSendMessageRef.current(transcript.trim());
+          }
+        } else if (wakeWordEnabledRef.current && (text.includes("hey ally") || text.includes("ally"))) {
           playWakeSound();
           setCompanionState('listening');
           
@@ -265,11 +280,6 @@ export default function App() {
             if (handleVoiceOutputRef.current) {
               handleVoiceOutputRef.current(greeting);
             }
-          }
-        } else if (!wakeWordEnabledRef.current && companionStateRef.current === 'listening') {
-          // If wake word is disabled, but microphone listening was clicked manually
-          if (handleSendMessageRef.current) {
-            await handleSendMessageRef.current(transcript);
           }
         }
       },
@@ -335,7 +345,9 @@ export default function App() {
           use_vision: triggerVision,
           ollama_host: ollamaHost,
           ollama_model: ollamaModel,
-          ollama_vision_model: ollamaVisionModel
+          ollama_vision_model: ollamaVisionModel,
+          provider: provider,
+          gemini_api_key: geminiApiKey
         })
       });
 
@@ -665,6 +677,10 @@ export default function App() {
             speechRate={speechRate}
             setSpeechRate={setSpeechRate}
             serverOnline={serverOnline}
+            provider={provider}
+            setProvider={setProvider}
+            geminiApiKey={geminiApiKey}
+            setGeminiApiKey={setGeminiApiKey}
           />
         )}
       </div>

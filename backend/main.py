@@ -61,6 +61,8 @@ class ChatRequest(BaseModel):
     ollama_host: Optional[str] = None
     ollama_model: Optional[str] = None
     ollama_vision_model: Optional[str] = None
+    provider: Optional[str] = "ollama"
+    gemini_api_key: Optional[str] = None
 
 class MemoryCreateRequest(BaseModel):
     key: str
@@ -93,7 +95,9 @@ async def chat_endpoint(request: ChatRequest):
         request.use_vision,
         ollama_host=request.ollama_host,
         ollama_model=request.ollama_model,
-        ollama_vision_model=request.ollama_vision_model
+        ollama_vision_model=request.ollama_vision_model,
+        provider=request.provider,
+        gemini_api_key=request.gemini_api_key
     )
     
     # Broadcast an update to frontend to check for new commands if any
