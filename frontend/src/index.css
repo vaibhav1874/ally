@@ -200,6 +200,9 @@ button {
   transform: translateY(0);
 }
 
+  transform: translateY(0);
+}
+
 .btn-secondary {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border-color);
@@ -209,4 +212,101 @@ button {
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* --- Holographic Jarvis HUD Styles --- */
+
+@keyframes rotate-cw {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes rotate-ccw {
+  0% { transform: rotate(360deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes glitch {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.9; }
+}
+
+.rotate-cw {
+  animation: rotate-cw 20s linear infinite;
+}
+
+.rotate-ccw {
+  animation: rotate-ccw 15s linear infinite;
+}
+
+.jarvis-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: radial-gradient(circle at center, rgba(10, 25, 47, 0.9) 0%, rgba(5, 10, 20, 0.98) 100%);
+  border: 1px solid rgba(0, 180, 216, 0.25);
+  box-shadow: 0 0 40px rgba(0, 180, 216, 0.1) inset;
+}
+
+.jarvis-container::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size: 100% 4px, 6px 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.jarvis-scanline {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(to bottom, rgba(0, 180, 216, 0) 0%, rgba(0, 180, 216, 0.15) 10%, rgba(0, 180, 216, 0) 20%);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.hud-panel {
+  background: rgba(10, 25, 47, 0.35);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 180, 216, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 180, 216, 0.05);
+}
+
+.hud-panel:hover {
+  border-color: rgba(0, 180, 216, 0.4);
+}
+
+.hud-title {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent-blue);
+  text-shadow: 0 0 10px rgba(0, 180, 216, 0.5);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hud-value {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.glow-blue {
+  text-shadow: 0 0 10px rgba(0, 180, 216, 0.6);
+}
+
+.glow-purple {
+  text-shadow: 0 0 10px rgba(157, 78, 221, 0.6);
 }

@@ -5,7 +5,8 @@ import ChatWindow from './components/ChatWindow';
 import MemoryHub from './components/MemoryHub';
 import AutomationPanel from './components/AutomationPanel';
 import Settings from './components/Settings';
-import { Cpu, Terminal, Brain, Settings as SettingsIcon } from 'lucide-react';
+import SystemStats from './components/SystemStats';
+import { Cpu, Terminal, Brain, Settings as SettingsIcon, Mic, Volume2 } from 'lucide-react';
 
 export default function App() {
   // Navigation tabs for the right sidebar
@@ -18,6 +19,7 @@ export default function App() {
   const [amplitude, setAmplitude] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [useVision, setUseVision] = useState(false);
+  const [jarvisMode, setJarvisMode] = useState(localStorage.getItem('ally_jarvis_mode') === 'true');
 
   // Settings state (loads from localStorage where possible)
   const [ollamaHost, setOllamaHost] = useState(localStorage.getItem('ally_ollama_host') || 'http://localhost:11434');
@@ -74,6 +76,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('ally_gemini_api_key', geminiApiKey);
   }, [geminiApiKey]);
+
+  useEffect(() => {
+    localStorage.setItem('ally_jarvis_mode', jarvisMode);
+  }, [jarvisMode]);
 
   // --- Play Web Audio Synth Chime ---
   const playWakeSound = () => {
@@ -292,7 +298,14 @@ export default function App() {
 
     // Initial load start if wakeWordEnabled is true
     if (success && wakeWordEnabledRef.current) {
-      voiceService.startListening();
+      // Find voice lang dynamically
+      let voiceLang = 'en-US';
+      if (window.speechSynthesis) {
+        const selectedName = localStorage.getItem('ally_voice');
+        const match = window.speechSynthesis.getVoices().find(v => v.name === selectedName);
+        if (match) voiceLang = match.lang;
+      }
+      voiceService.startListening(voiceLang);
     }
 
     return () => {
@@ -303,7 +316,12 @@ export default function App() {
   // Control speech listening state dynamically when wakeWordEnabled toggles
   useEffect(() => {
     if (wakeWordEnabled) {
-      voiceService.startListening();
+      let voiceLang = 'en-US';
+      if (typeof window !== 'undefined' && window.speechSynthesis && selectedVoice) {
+        const match = window.speechSynthesis.getVoices().find(v => v.name === selectedVoice);
+        if (match) voiceLang = match.lang;
+      }
+      voiceService.startListening(voiceLang);
     } else {
       voiceService.stopListening();
     }
@@ -492,6 +510,199 @@ export default function App() {
     }
   };
 
+  if (jarvisMode) {
+    return (
+      <div className="jarvis-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        width: '100vw',
+        padding: '1.5rem',
+        gap: '1rem',
+        color: '#00b4d8'
+      }}>
+        <div className="jarvis-scanline"></div>
+        
+        {/* Top HUD bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 180, 216, 0.3)', paddingBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className="glow-blue" style={{ fontSize: '1.2rem', fontWeight: 'bold', fontFamily: 'var(--font-mono)' }}>JARVIS SYSTEM v3.5</div>
+            <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', background: 'rgba(0,180,216,0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid rgba(0,180,216,0.3)' }}>ONLINE</span>
+          </div>
+          
+          <button
+            onClick={() => setJarvisMode(false)}
+            className="hud-panel"
+            style={{
+              padding: '0.4rem 1rem',
+              fontSize: '0.75rem',
+              color: '#00b4d8',
+              fontFamily: 'var(--font-mono)',
+              cursor: 'pointer',
+              border: '1px solid rgba(0, 180, 216, 0.4)',
+              borderRadius: '6px'
+            }}
+          >
+            [ DEACTIVATE HUD MODE ]
+          </button>
+        </div>
+
+        {/* Main HUD Body */}
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1.8fr 1fr', gap: '1.5rem', height: 'calc(100% - 4rem)' }}>
+          
+          {/* Left Panel */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%' }}>
+            <div className="hud-panel" style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+              <span className="hud-title">SYSTEM STATUS</span>
+              <div style={{ borderBottom: '1px solid rgba(0, 180, 216, 0.1)', paddingBottom: '0.5rem' }}>
+                <div style={{ fontSize: '0.65rem', color: 'rgba(0,180,216,0.6)' }}>CORE AI ENGINE</div>
+                <div className="hud-value glow-blue" style={{ fontSize: '0.95rem' }}>{provider === 'gemini' ? 'GOOGLE GEMINI 2.5' : 'LOCAL OLLAMA ENGINE'}</div>
+              </div>
+              <div style={{ borderBottom: '1px solid rgba(0, 180, 216, 0.1)', paddingBottom: '0.5rem' }}>
+                <div style={{ fontSize: '0.65rem', color: 'rgba(0,180,216,0.6)' }}>SPEECH SYNTHESIS</div>
+                <div className="hud-value" style={{ fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {selectedVoice ? selectedVoice : 'Default System Voice'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.65rem', color: 'rgba(0,180,216,0.6)' }}>MIC LISTENING</div>
+                <div className="hud-value glow-blue" style={{ color: companionState === 'listening' ? '#10b981' : '#00b4d8', fontSize: '0.95rem' }}>
+                  {companionState === 'listening' ? '● RECORDING / INGESTING' : '○ STANDBY'}
+                </div>
+              </div>
+            </div>
+            
+            <div className="hud-panel" style={{ padding: '1rem', flex: 1.2, overflowY: 'auto' }}>
+              <span className="hud-title">HARDWARE UTILIZATION</span>
+              <SystemStats />
+            </div>
+          </div>
+
+          {/* Center Panel */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            <div style={{ position: 'relative', width: '320px', height: '320px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {/* Outer ring */}
+              <div className="rotate-cw" style={{
+                position: 'absolute',
+                width: '100%',
+                height: '100%',
+                borderRadius: '50%',
+                border: '2px dashed rgba(0, 180, 216, 0.25)',
+                boxShadow: '0 0 20px rgba(0, 180, 216, 0.05)'
+              }}></div>
+              {/* Middle ring */}
+              <div className="rotate-ccw" style={{
+                position: 'absolute',
+                width: '82%',
+                height: '82%',
+                borderRadius: '50%',
+                border: '1px solid rgba(0, 180, 216, 0.4)',
+                borderTopColor: 'transparent',
+                borderBottomColor: 'transparent'
+              }}></div>
+              {/* Inner ring */}
+              <div className="rotate-cw" style={{
+                position: 'absolute',
+                width: '66%',
+                height: '66%',
+                borderRadius: '50%',
+                border: '2px dotted rgba(0, 180, 216, 0.6)'
+              }}></div>
+              
+              <div style={{ position: 'relative', zIndex: 5, width: '130px', height: '130px' }}>
+                <OrbVisualizer state={companionState} amplitude={amplitude} />
+              </div>
+            </div>
+
+            <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', width: '90%' }}>
+              <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'rgba(0,180,216,0.6)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                {companionState === 'listening' ? 'INGESTING SPEECH INPUT' : companionState === 'thinking' ? 'PROCESSING RESPONSE' : companionState === 'speaking' ? 'TRANSMITTING VOICE SYNTHESIS' : 'SYSTEM SLEEPING - CLICK CORE TO WAKE'}
+              </span>
+              
+              <div style={{
+                width: '100%',
+                padding: '0.8rem 1.2rem',
+                borderRadius: '8px',
+                border: '1px solid rgba(0, 180, 216, 0.15)',
+                background: 'rgba(10, 25, 47, 0.25)',
+                minHeight: '80px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                fontSize: '0.85rem',
+                fontFamily: 'var(--font-mono)',
+                color: '#f4f4f9',
+                textShadow: '0 0 5px rgba(0, 180, 216, 0.3)',
+                overflowY: 'auto',
+                maxHeight: '120px'
+              }}>
+                {companionState === 'listening' ? (
+                  <span style={{ color: '#10b981' }}>[ Listening... Speak now, sir ]</span>
+                ) : companionState === 'thinking' ? (
+                  <span className="animate-pulse">Thinking... Analyzing request details</span>
+                ) : companionState === 'speaking' && messages.length > 0 ? (
+                  <span>{messages[messages.length - 1].content}</span>
+                ) : (
+                  <span style={{ color: 'rgba(0,180,216,0.5)' }}>"Hey Jarvis, open notepad" or click the mic to speak</span>
+                )}
+              </div>
+
+              <button
+                onClick={handleToggleMic}
+                style={{
+                  marginTop: '1rem',
+                  width: '45px',
+                  height: '45px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: companionState === 'listening' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(0, 180, 216, 0.1)',
+                  border: '1px solid',
+                  borderColor: companionState === 'listening' ? '#10b981' : 'rgba(0, 180, 216, 0.4)',
+                  color: companionState === 'listening' ? '#10b981' : '#00b4d8',
+                  cursor: 'pointer',
+                  boxShadow: companionState === 'listening' ? '0 0 15px rgba(16, 185, 129, 0.4)' : 'none'
+                }}
+              >
+                {companionState === 'listening' ? <Volume2 size={20} /> : <Mic size={20} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Right Panel */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', overflow: 'hidden' }}>
+            <div className="hud-panel" style={{ padding: '1rem', flex: 1.2, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <span className="hud-title" style={{ marginBottom: '0.5rem' }}>COCKPIT AUTONOMOUS ACTIONS</span>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <AutomationPanel
+                  pendingTasks={pendingTasks}
+                  completedTasks={completedTasks}
+                  onApprove={handleApproveCommand}
+                  onReject={handleRejectCommand}
+                />
+              </div>
+            </div>
+            
+            <div className="hud-panel" style={{ padding: '1rem', flex: 0.8, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <span className="hud-title" style={{ marginBottom: '0.5rem' }}>LONG-TERM MEMORY BANK</span>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <MemoryHub
+                  memories={memories}
+                  onAddMemory={handleAddMemory}
+                  onDeleteMemory={handleDeleteMemory}
+                  onRefresh={fetchMemories}
+                />
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       display: 'grid',
@@ -531,6 +742,24 @@ export default function App() {
             <h1 style={{ fontSize: '1.1rem', fontWeight: 700, letterSpacing: '0.02em' }}>Ally Companion</h1>
             <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>DESKTOP INTELLIGENCE v1.0</span>
           </div>
+          
+          <button
+            onClick={() => setJarvisMode(true)}
+            style={{
+              padding: '0.3rem 0.6rem',
+              fontSize: '0.65rem',
+              fontWeight: 'bold',
+              fontFamily: 'var(--font-mono)',
+              border: '1px solid rgba(0, 180, 216, 0.4)',
+              background: 'rgba(0, 180, 216, 0.15)',
+              color: '#00b4d8',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              marginLeft: 'auto'
+            }}
+          >
+            🤖 JARVIS HUD
+          </button>
         </div>
 
         {/* Floating animated orb */}

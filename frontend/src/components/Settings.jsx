@@ -13,6 +13,12 @@ export const isFemaleVoice = (voice) => {
   return femaleKeywords.some(keyword => name.includes(keyword)) && voice.lang.toLowerCase().startsWith('en');
 };
 
+export const isIndianVoice = (voice) => {
+  const name = voice.name.toLowerCase();
+  const lang = voice.lang.toLowerCase();
+  return lang.startsWith('en-in') || name.includes('india') || name.includes('indian') || name.includes('heera') || name.includes('ravi') || name.includes('veena') || name.includes('priya');
+};
+
 export default function Settings({
   ollamaHost = 'http://localhost:11434',
   ollamaModel = 'llama3.1',
@@ -51,15 +57,22 @@ export default function Settings({
         const voices = window.speechSynthesis.getVoices();
         setAvailableVoices(voices);
 
-        // Auto-select a female voice if nothing is selected or if we haven't forced a female voice once yet
-        const hasForcedFemale = localStorage.getItem('ally_voice_setup_female') === 'true';
+        // Auto-select an Indian voice if nothing is selected or if we haven't forced it once yet
+        const hasForcedIndian = localStorage.getItem('ally_voice_setup_indian') === 'true';
         
-        if (!selectedVoice || !hasForcedFemale) {
-          const femaleMatch = voices.find(isFemaleVoice);
-          if (femaleMatch) {
-            setSelectedVoice(femaleMatch.name);
-            localStorage.setItem('ally_voice', femaleMatch.name);
-            localStorage.setItem('ally_voice_setup_female', 'true');
+        if (!selectedVoice || !hasForcedIndian) {
+          const indianMatch = voices.find(isIndianVoice);
+          if (indianMatch) {
+            setSelectedVoice(indianMatch.name);
+            localStorage.setItem('ally_voice', indianMatch.name);
+            localStorage.setItem('ally_voice_setup_indian', 'true');
+          } else {
+            const femaleMatch = voices.find(isFemaleVoice);
+            if (femaleMatch) {
+              setSelectedVoice(femaleMatch.name);
+              localStorage.setItem('ally_voice', femaleMatch.name);
+              localStorage.setItem('ally_voice_setup_indian', 'true');
+            }
           }
         }
       }
@@ -288,9 +301,13 @@ export default function Settings({
                 <option value="">Default System Voice</option>
                 {availableVoices.map((v, i) => {
                   const isFemale = isFemaleVoice(v);
+                  const isIndian = isIndianVoice(v);
+                  let suffix = '';
+                  if (isIndian) suffix = ' 🇮🇳 (Indian Accent)';
+                  else if (isFemale) suffix = ' ♀ (Female)';
                   return (
                     <option key={i} value={v.name}>
-                      {v.name} ({v.lang}){isFemale ? ' ♀ (Female)' : ''}
+                      {v.name} ({v.lang}){suffix}
                     </option>
                   );
                 })}

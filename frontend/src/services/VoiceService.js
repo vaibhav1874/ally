@@ -75,8 +75,9 @@ class VoiceService {
     return true;
   }
 
-  startListening() {
+  startListening(lang = 'en-US') {
     if (!this.recognition) return;
+    this.recognition.lang = lang;
     this.isListening = true;
     try {
       this.recognition.start();
