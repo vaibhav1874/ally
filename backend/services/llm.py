@@ -353,7 +353,18 @@ def query_ally(
                     # No more function calls
                     break
                     
-            final_text = response.text
+            # Safely extract text parts from response candidate to prevent ValueError on function call parts
+            text_parts = []
+            if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                for p in response.candidates[0].content.parts:
+                    try:
+                        val = p.text
+                        if val:
+                            text_parts.append(val)
+                    except Exception:
+                        pass
+            final_text = "\n".join(text_parts) if text_parts else "Action processed successfully."
+            
             save_chat_message("assistant", final_text)
             return {"response": final_text, "tool_calls": tool_calls_executed}
             
