@@ -9,13 +9,24 @@ from pathlib import Path
 from typing import Dict, List, Any
 from backend.config import SANDBOX_DIR
 
-# Windows API / active window tracking utilities
+# Windows API / active window tracking utilities with 64-bit safety configurations
+if platform.system() == "Windows":
+    try:
+        ctypes.windll.user32.GetForegroundWindow.restype = ctypes.wintypes.HWND
+        ctypes.windll.user32.GetWindowTextLengthW.argtypes = [ctypes.wintypes.HWND]
+        ctypes.windll.user32.GetWindowTextW.argtypes = [ctypes.wintypes.HWND, ctypes.wintypes.LPWSTR, ctypes.c_int]
+        ctypes.windll.user32.GetWindowThreadProcessId.argtypes = [ctypes.wintypes.HWND, ctypes.POINTER(ctypes.wintypes.DWORD)]
+    except Exception as e:
+        print(f"Error setting up active window ctypes signatures: {e}")
+
 def get_active_window_title() -> str:
     """Retrieves the title of the active foreground window on Windows."""
     try:
         if platform.system() != "Windows":
             return "Active window tracking only supported on Windows"
         hwnd = ctypes.windll.user32.GetForegroundWindow()
+        if not hwnd:
+            return "No Active Window"
         length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
         if length > 0:
             buff = ctypes.create_unicode_buffer(length + 1)
@@ -31,6 +42,8 @@ def get_active_window_process_name() -> str:
         if platform.system() != "Windows":
             return "N/A"
         hwnd = ctypes.windll.user32.GetForegroundWindow()
+        if not hwnd:
+            return "N/A"
         pid = ctypes.wintypes.DWORD()
         ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         if pid.value > 0:
@@ -43,9 +56,12 @@ def get_active_window_process_name() -> str:
 def get_active_window_context() -> str:
     """Formats active window details as a context block for the LLM."""
     try:
+        if platform.system() != "Windows":
+            return ""
         title = get_active_window_title()
         app_name = get_active_window_process_name()
-        if platform.system() != "Windows":
+        # If we couldn't get a valid window or are running headlessly, return empty context
+        if not title or title in ("No Active Window", "Unknown Window") or app_name == "N/A":
             return ""
         return (
             f"Active Desktop Context:\n"
