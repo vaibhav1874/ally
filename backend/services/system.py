@@ -3,8 +3,57 @@ import subprocess
 import psutil
 import platform
 import uuid
+import ctypes
+from ctypes import wintypes
+from pathlib import Path
 from typing import Dict, List, Any
 from backend.config import SANDBOX_DIR
+
+# Windows API / active window tracking utilities
+def get_active_window_title() -> str:
+    """Retrieves the title of the active foreground window on Windows."""
+    try:
+        if platform.system() != "Windows":
+            return "Active window tracking only supported on Windows"
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+        if length > 0:
+            buff = ctypes.create_unicode_buffer(length + 1)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
+            return buff.value
+        return "Unknown Window"
+    except Exception as e:
+        return f"Error retrieving window title: {str(e)}"
+
+def get_active_window_process_name() -> str:
+    """Retrieves the executable process name of the active foreground window on Windows."""
+    try:
+        if platform.system() != "Windows":
+            return "N/A"
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        pid = ctypes.wintypes.DWORD()
+        ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value > 0:
+            process = psutil.Process(pid.value)
+            return process.name()
+        return "Unknown Process"
+    except Exception as e:
+        return f"Error retrieving process name: {str(e)}"
+
+def get_active_window_context() -> str:
+    """Formats active window details as a context block for the LLM."""
+    try:
+        title = get_active_window_title()
+        app_name = get_active_window_process_name()
+        if platform.system() != "Windows":
+            return ""
+        return (
+            f"Active Desktop Context:\n"
+            f"- Foreground Application: {app_name}\n"
+            f"- Window Title: {title}\n"
+        )
+    except Exception:
+        return ""
 
 # In-memory queue to track shell commands requiring user confirmation
 PENDING_COMMANDS: Dict[str, Dict[str, Any]] = {}
