@@ -13,7 +13,8 @@ from backend.services.system import (
     safe_read_file,
     safe_write_file,
     queue_command,
-    queue_ui_automation
+    queue_ui_automation,
+    get_active_window_context
 )
 
 # Instantiate the local Ollama client
@@ -259,7 +260,8 @@ def query_ally(
 
         try:
             memories_context = get_memories_context_string(user_message)
-            system_inst = f"{SYSTEM_INSTRUCTION}\n\n{memories_context}"
+            window_context = get_active_window_context()
+            system_inst = f"{SYSTEM_INSTRUCTION}\n\n{memories_context}\n\n{window_context}"
             
             # Map SQLite history to Gemini format
             history = get_chat_history(limit=12)
@@ -388,10 +390,11 @@ def query_ally(
     try:
         # Load long-term memory records
         memories_context = get_memories_context_string(user_message)
+        window_context = get_active_window_context()
         
         # Build system primer & user history context
         messages = [
-            {"role": "system", "content": f"{SYSTEM_INSTRUCTION}\n\n{memories_context}"}
+            {"role": "system", "content": f"{SYSTEM_INSTRUCTION}\n\n{memories_context}\n\n{window_context}"}
         ]
         
         # Pull history from SQLite
@@ -411,7 +414,7 @@ def query_ally(
                 vision_messages = [
                     {
                         "role": "user", 
-                        "content": f"{SYSTEM_INSTRUCTION}\n\n{memories_context}\nAnalyze this screen grab: {user_message}",
+                        "content": f"{SYSTEM_INSTRUCTION}\n\n{memories_context}\n\n{window_context}\nAnalyze this screen grab: {user_message}",
                         "images": [str(screenshot_path)]
                     }
                 ]
