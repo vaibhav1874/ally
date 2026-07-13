@@ -61,17 +61,24 @@ export default function Settings({
         const hasForcedIndian = localStorage.getItem('ally_voice_setup_indian') === 'true';
         
         if (!selectedVoice || !hasForcedIndian) {
-          const indianMatch = voices.find(isIndianVoice);
-          if (indianMatch) {
-            setSelectedVoice(indianMatch.name);
-            localStorage.setItem('ally_voice', indianMatch.name);
+          const indianFemaleMatch = voices.find(v => isIndianVoice(v) && isFemaleVoice(v));
+          if (indianFemaleMatch) {
+            setSelectedVoice(indianFemaleMatch.name);
+            localStorage.setItem('ally_voice', indianFemaleMatch.name);
             localStorage.setItem('ally_voice_setup_indian', 'true');
           } else {
-            const femaleMatch = voices.find(isFemaleVoice);
-            if (femaleMatch) {
-              setSelectedVoice(femaleMatch.name);
-              localStorage.setItem('ally_voice', femaleMatch.name);
+            const indianMatch = voices.find(isIndianVoice);
+            if (indianMatch) {
+              setSelectedVoice(indianMatch.name);
+              localStorage.setItem('ally_voice', indianMatch.name);
               localStorage.setItem('ally_voice_setup_indian', 'true');
+            } else {
+              const femaleMatch = voices.find(isFemaleVoice);
+              if (femaleMatch) {
+                setSelectedVoice(femaleMatch.name);
+                localStorage.setItem('ally_voice', femaleMatch.name);
+                localStorage.setItem('ally_voice_setup_indian', 'true');
+              }
             }
           }
         }
@@ -303,7 +310,8 @@ export default function Settings({
                   const isFemale = isFemaleVoice(v);
                   const isIndian = isIndianVoice(v);
                   let suffix = '';
-                  if (isIndian) suffix = ' 🇮🇳 (Indian Accent)';
+                  if (isIndian && isFemale) suffix = ' 🇮🇳 ♀ (Indian Female Voice)';
+                  else if (isIndian) suffix = ' 🇮🇳 (Indian Accent)';
                   else if (isFemale) suffix = ' ♀ (Female)';
                   return (
                     <option key={i} value={v.name}>

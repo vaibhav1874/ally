@@ -42,6 +42,7 @@ export default function App() {
   const amplitudeIntervalRef = useRef(null);
   const wakeWordEnabledRef = useRef(wakeWordEnabled);
   const companionStateRef = useRef(companionState);
+  const jarvisModeRef = useRef(jarvisMode);
   const handleSendMessageRef = useRef(null);
   const handleVoiceOutputRef = useRef(null);
 
@@ -52,6 +53,10 @@ export default function App() {
   useEffect(() => {
     companionStateRef.current = companionState;
   }, [companionState]);
+
+  useEffect(() => {
+    jarvisModeRef.current = jarvisMode;
+  }, [jarvisMode]);
 
   useEffect(() => {
     localStorage.setItem('ally_voice_enabled', voiceEnabled);
@@ -259,7 +264,10 @@ export default function App() {
           if (transcript.trim() && handleSendMessageRef.current) {
             await handleSendMessageRef.current(transcript.trim());
           }
-        } else if (wakeWordEnabledRef.current && (text.includes("hey ally") || text.includes("ally"))) {
+        } else if (wakeWordEnabledRef.current && (
+          text.includes("hey ally") || text.includes("ally") ||
+          text.includes("hey jarvis") || text.includes("jarvis")
+        )) {
           playWakeSound();
           setCompanionState('listening');
           
@@ -269,6 +277,10 @@ export default function App() {
             query = transcript.substring(text.indexOf("hey ally") + 8).trim();
           } else if (text.includes("ally")) {
             query = transcript.substring(text.indexOf("ally") + 4).trim();
+          } else if (text.includes("hey jarvis")) {
+            query = transcript.substring(text.indexOf("hey jarvis") + 10).trim();
+          } else if (text.includes("jarvis")) {
+            query = transcript.substring(text.indexOf("jarvis") + 6).trim();
           }
 
           // Clean symbols
@@ -282,7 +294,9 @@ export default function App() {
           } else {
             // Wake word with no instruction - Greet user
             setCompanionState('speaking');
-            const greeting = "Hello! I'm Ally. How can I help you today?";
+            const greeting = jarvisModeRef.current
+              ? "System initialized. Online and ready, sir. How can I assist you?"
+              : "Hello! I'm Ally. How can I help you today?";
             if (handleVoiceOutputRef.current) {
               handleVoiceOutputRef.current(greeting);
             }
@@ -434,7 +448,23 @@ export default function App() {
       setCompanionState('idle');
     } else {
       setCompanionState('listening');
-      voiceService.startListening();
+      let voiceLang = 'en-US';
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const selectedName = localStorage.getItem('ally_voice') || selectedVoice;
+        const match = window.speechSynthesis.getVoices().find(v => v.name === selectedName);
+        if (match) {
+          voiceLang = match.lang;
+        } else {
+          // Fallback to Indian English if available
+          const indianMatch = window.speechSynthesis.getVoices().find(v => {
+            const name = v.name.toLowerCase();
+            const lang = v.lang.toLowerCase();
+            return lang.startsWith('en-in') || name.includes('india') || name.includes('indian');
+          });
+          if (indianMatch) voiceLang = indianMatch.lang;
+        }
+      }
+      voiceService.startListening(voiceLang);
     }
   };
 
